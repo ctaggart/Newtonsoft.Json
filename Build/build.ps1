@@ -24,7 +24,7 @@
   $releaseDir = "$baseDir\Release"
   $workingDir = "$baseDir\$workingName"
   $workingSourceDir = "$workingDir\Src"
-  if ($env:appveyor){ $workingSourceDir = $sourceDir } # for source linking
+  if ($env:ci){ $workingSourceDir = $sourceDir } # for source linking
 
   $nugetPath = "$buildDir\Temp\nuget.exe"
   $vswhereVersion = "2.1.4"
@@ -53,18 +53,22 @@ task default -depends Test,Package
 task Clean {
   Write-Host "Setting location to $baseDir"
   Set-Location $baseDir
-  if ($env:appveyor){ return }
 
-  if (Test-Path -path $workingDir)
+  if($env:ci)
   {
-    Write-Host "Deleting existing working directory $workingDir"
-
-    Execute-Command -command { del $workingDir -Recurse -Force }
+    Execute-Command -command { git clean -xfd }
+  }
+  else
+  {
+    if (Test-Path -path $workingDir)
+    {
+      Write-Host "Deleting existing working directory $workingDir"
+      Execute-Command -command { del $workingDir -Recurse -Force }
+    }
   }
 
   Write-Host "Creating working directory $workingDir"
   New-Item -Path $workingDir -ItemType Directory
-
 }
 
 # Build each solution, optionally signed
@@ -81,7 +85,8 @@ task Build -depends Clean {
   Write-Host "MSBuild path $script:msBuildPath"
 
   Write-Host "Copying source to working source directory $workingSourceDir"
-  if (-not $env:appveyor){
+  if (-not $env:ci)
+  {
     robocopy $sourceDir $workingSourceDir /MIR /NFL /NDL /NP /XD bin obj TestResults AppPackages $packageDirs .vs artifacts /XF *.suo *.user *.lock.json | Out-Default
   }
   Copy-Item -Path $baseDir\LICENSE.md -Destination $workingDir\
