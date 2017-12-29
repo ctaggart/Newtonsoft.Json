@@ -52,6 +52,7 @@ task default -depends Test,Package
 task Clean {
   Write-Host "Setting location to $baseDir"
   Set-Location $baseDir
+  if ($env:appveyor){ return }
 
   if (Test-Path -path $workingDir)
   {
