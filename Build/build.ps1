@@ -81,9 +81,11 @@ task Build -depends Clean {
   Write-Host "MSBuild path $script:msBuildPath"
 
   Write-Host "Copying source to working source directory $workingSourceDir"
-  robocopy $sourceDir $workingSourceDir /MIR /NFL /NDL /NP /XD bin obj TestResults AppPackages $packageDirs .vs artifacts /XF *.suo *.user *.lock.json | Out-Default
-  Copy-Item -Path $baseDir\LICENSE.md -Destination $workingDir\
-  mkdir "$workingDir\Build" -Force
+  if (-not $env:appveyor){
+    robocopy $sourceDir $workingSourceDir /MIR /NFL /NDL /NP /XD bin obj TestResults AppPackages $packageDirs .vs artifacts /XF *.suo *.user *.lock.json | Out-Default
+    Copy-Item -Path $baseDir\LICENSE.md -Destination $workingDir\
+    mkdir "$workingDir\Build" -Force
+  }
   Copy-Item -Path $buildDir\install.ps1 -Destination $workingDir\Build\
 
   $xml = [xml](Get-Content "$workingSourceDir\Newtonsoft.Json\Newtonsoft.Json.csproj")
