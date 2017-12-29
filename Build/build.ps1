@@ -84,9 +84,9 @@ task Build -depends Clean {
   $script:msBuildPath = GetMsBuildPath
   Write-Host "MSBuild path $script:msBuildPath"
 
-  Write-Host "Copying source to working source directory $workingSourceDir"
   if (-not $env:ci)
   {
+    Write-Host "Copying source to working source directory $workingSourceDir"
     robocopy $sourceDir $workingSourceDir /MIR /NFL /NDL /NP /XD bin obj TestResults AppPackages $packageDirs .vs artifacts /XF *.suo *.user *.lock.json | Out-Default
   }
   Copy-Item -Path $baseDir\LICENSE.md -Destination $workingDir\
