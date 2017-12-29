@@ -23,7 +23,8 @@
   $docDir = "$baseDir\Doc"
   $releaseDir = "$baseDir\Release"
   $workingDir = "$baseDir\$workingName"
-  if ($env:appveyor){ $workingDir = $sourceDir } # for source linking
+  $workingSourceDir = "$workingDir\Src"
+  if ($env:appveyor){ $workingSourceDir = $sourceDir } # for source linking
 
   $nugetPath = "$buildDir\Temp\nuget.exe"
   $vswhereVersion = "2.1.4"
