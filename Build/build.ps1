@@ -12,8 +12,8 @@
   $msbuildVerbosity = 'minimal'
   $treatWarningsAsErrors = $false
   $workingName = if ($workingName) {$workingName} else {"Working"}
-  $netCliChannel = "2.0"
-  $netCliVersion = "2.0.0"
+  # $netCliChannel = "2.0"
+  # $netCliVersion = "2.0.0"
   $nugetUrl = "http://dist.nuget.org/win-x86-commandline/latest/nuget.exe"
 
   $baseDir  = resolve-path ..
@@ -128,7 +128,7 @@ task Package -depends Build {
 
     $targetFrameworks = ($script:enabledBuilds | Select-Object @{Name="Framework";Expression={$_.Framework}} | select -expand Framework) -join ";"
 
-    exec { & $script:msBuildPath "/t:pack" "/v:$msbuildVerbosity" "/p:IncludeSource=true" "/p:Configuration=Release" "/p:TargetFrameworks=`"$targetFrameworks`"" "/m" "$workingSourceDir\Newtonsoft.Json\Newtonsoft.Json.csproj" }
+    exec { & $script:msBuildPath "/t:pack" "/v:$msbuildVerbosity" "/p:Configuration=Release" "/p:TargetFrameworks=`"$targetFrameworks`"" "/m" "$workingSourceDir\Newtonsoft.Json\Newtonsoft.Json.csproj" }
 
     mkdir $workingDir\NuGet
     move -Path $workingSourceDir\Newtonsoft.Json\bin\Release\*.nupkg -Destination $workingDir\NuGet
@@ -222,7 +222,7 @@ function NetCliTests($build)
   $location = "$workingSourceDir\Newtonsoft.Json.Tests"
   $testDir = if ($build.TestFramework -ne $null) { $build.TestFramework } else { $build.Framework }
 
-  exec { .\Tools\Dotnet\dotnet-install.ps1 -Channel $netCliChannel -Version $netCliVersion | Out-Default }
+  # exec { .\Tools\Dotnet\dotnet-install.ps1 -Channel $netCliChannel -Version $netCliVersion | Out-Default }
 
   try
   {
@@ -235,7 +235,7 @@ function NetCliTests($build)
     Write-Host "Project path: $projectPath"
     Write-Host
 
-    exec { dotnet test $projectPath -f $testDir -c Release -l trx -r $workingDir --no-restore --no-build | Out-Default }
+    # exec { dotnet test $projectPath -f $testDir -c Release -l trx -r $workingDir --no-restore --no-build | Out-Default }
   }
   finally
   {
@@ -254,7 +254,7 @@ function NUnitTests($build)
   try
   {
     Set-Location $testRunDir
-    exec { & $nunitConsolePath\tools\nunit3-console.exe "$testRunDir\Newtonsoft.Json.Tests.dll" --framework=$framework --result=$workingDir\$testDir.xml --out=$workingDir\$testDir.txt | Out-Default } "Error running $testDir tests"
+    # exec { & $nunitConsolePath\tools\nunit3-console.exe "$testRunDir\Newtonsoft.Json.Tests.dll" --framework=$framework --result=$workingDir\$testDir.xml --out=$workingDir\$testDir.txt | Out-Default } "Error running $testDir tests"
   }
   finally
   {
