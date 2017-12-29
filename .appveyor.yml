@@ -12,10 +12,8 @@ configuration: Release
 environment:
   VisualStudioVersion: 15.0
 init:
-  - git config --global core.autocrlf input
+  git config --global core.autocrlf true
 build_script:
-- dotnet --version
-- msbuild /t:restore Src\Newtonsoft.Json.sln
 - ps: Build\runbuild.ps1
 artifacts:
 - path: Working\NuGet\*.nupkg
