@@ -23,7 +23,7 @@
   $docDir = "$baseDir\Doc"
   $releaseDir = "$baseDir\Release"
   $workingDir = "$baseDir\$workingName"
-  $workingSourceDir = "$workingDir\Src"
+  if ($env:appveyor){ $workingDir = $sourceDir } # for source linking
 
   $nugetPath = "$buildDir\Temp\nuget.exe"
   $vswhereVersion = "2.1.4"
@@ -177,7 +177,7 @@ function NetCliBuild()
   Write-Host -ForegroundColor Green "Building $libraryFrameworks in $projectPath"
   Write-Host
 
-  exec { & $script:msBuildPath "/t:build" "/v:$msbuildVerbosity" $projectPath "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/p:AssemblyOriginatorKeyFile=$signKeyPath" "/p:SignAssembly=$signAssemblies" "/p:TreatWarningsAsErrors=$treatWarningsAsErrors" "/p:AdditionalConstants=$additionalConstants" "/p:SourceLinkCreate=true" "/m" }
+  exec { & $script:msBuildPath "/t:build" "/v:$msbuildVerbosity" $projectPath "/p:Configuration=Release" "/p:LibraryFrameworks=`"$libraryFrameworks`"" "/p:TestFrameworks=`"$testFrameworks`"" "/p:AssemblyOriginatorKeyFile=$signKeyPath" "/p:SignAssembly=$signAssemblies" "/p:TreatWarningsAsErrors=$treatWarningsAsErrors" "/p:AdditionalConstants=$additionalConstants" "/m" }
 }
 
 function EnsureNuGetExists()
