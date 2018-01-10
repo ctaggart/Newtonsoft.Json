@@ -3,6 +3,8 @@
   $majorVersion = "11.0"
   $majorWithReleaseVersion = "11.0.1"
   $nugetPrerelease = "beta3"
+  # append pdb001 to prerelease version
+  if ($env:appveyor){ $nugetPrerelease = $nugetPrerelease + 'pdb' + [int]::Parse($env:appveyor_build_number).ToString('000') }
   $version = GetVersion $majorWithReleaseVersion
   $packageId = "Newtonsoft.Json"
   $signAssemblies = $false
@@ -127,7 +129,7 @@ task Package -depends Build {
 
     $targetFrameworks = ($script:enabledBuilds | Select-Object @{Name="Framework";Expression={$_.Framework}} | select -expand Framework) -join ";"
 
-    exec { & $script:msBuildPath "/t:pack" "/v:$msbuildVerbosity" "/p:IncludeSource=true" "/p:Configuration=Release" "/p:TargetFrameworks=`"$targetFrameworks`"" "/m" "$workingSourceDir\Newtonsoft.Json\Newtonsoft.Json.csproj" }
+    exec { & $script:msBuildPath "/t:pack" "/v:$msbuildVerbosity" "/p:Configuration=Release" "/p:TargetFrameworks=`"$targetFrameworks`"" "/m" "$workingSourceDir\Newtonsoft.Json\Newtonsoft.Json.csproj" }
 
     mkdir $workingDir\NuGet
     move -Path $workingSourceDir\Newtonsoft.Json\bin\Release\*.nupkg -Destination $workingDir\NuGet
