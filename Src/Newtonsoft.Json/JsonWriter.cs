@@ -82,7 +82,7 @@ namespace Newtonsoft.Json
             State[] errorStates = StateArrayTempate[0];
             State[] valueStates = StateArrayTempate[7];
 
-            TypeValuesAndNames enumValuesAndNames = EnumUtils.GetEnumValuesAndNames(typeof(JsonToken));
+            EnumInfo enumValuesAndNames = EnumUtils.GetEnumValuesAndNames(typeof(JsonToken));
 
             foreach (ulong valueToken in enumValuesAndNames.Values)
             {
@@ -1608,7 +1608,8 @@ namespace Newtonsoft.Json
 
                     case PrimitiveTypeCode.DecimalNullable:
                         writer.WriteValue((value == null) ? (decimal?)null : (decimal)value);
-                        break;
+                        return;
+
                     case PrimitiveTypeCode.Guid:
                         writer.WriteValue((Guid)value);
                         return;

@@ -25,6 +25,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Serialization;
 #if !HAVE_LINQ
@@ -33,16 +34,18 @@ using Newtonsoft.Json.Utilities.LinqBridge;
 using System.Linq;
 #endif
 using System.Reflection;
+using System.Text;
 
 namespace Newtonsoft.Json.Utilities
 {
     internal static class EnumUtils
     {
         private const char EnumSeparatorChar = ',';
+        private const string EnumSeparatorString = ", ";
 
-        private static readonly ThreadSafeStore<Type, TypeValuesAndNames> ValuesAndNamesPerEnum = new ThreadSafeStore<Type, TypeValuesAndNames>(InitializeValuesAndNames);
+        private static readonly ThreadSafeStore<Type, EnumInfo> ValuesAndNamesPerEnum = new ThreadSafeStore<Type, EnumInfo>(InitializeValuesAndNames);
 
-        private static TypeValuesAndNames InitializeValuesAndNames(Type enumType)
+        private static EnumInfo InitializeValuesAndNames(Type enumType)
         {
             string[] names = Enum.GetNames(enumType);
             string[] resolvedNames = new string[names.Length];
@@ -72,7 +75,9 @@ namespace Newtonsoft.Json.Utilities
                 resolvedNames[i] = resolvedName;
             }
 
-            return new TypeValuesAndNames(values, names, resolvedNames);
+            bool isFlags = enumType.IsDefined(typeof(FlagsAttribute), false);
+
+            return new EnumInfo(isFlags, values, names, resolvedNames);
         }
 
         public static IList<T> GetFlagsValues<T>(T value) where T : struct
@@ -87,7 +92,7 @@ namespace Newtonsoft.Json.Utilities
             Type underlyingType = Enum.GetUnderlyingType(value.GetType());
 
             ulong num = ToUInt64(value);
-            TypeValuesAndNames enumNameValues = GetEnumValuesAndNames(enumType);
+            EnumInfo enumNameValues = GetEnumValuesAndNames(enumType);
             IList<T> selectedFlagsValues = new List<T>();
 
             for (int i = 0; i < enumNameValues.Values.Length; i++)
@@ -108,44 +113,103 @@ namespace Newtonsoft.Json.Utilities
             return selectedFlagsValues;
         }
 
-        public static object ParseEnumName(string enumText, bool isNullable, bool disallowValue, Type t)
+        public static bool TryToString(Type enumType, object value, bool camelCaseText, out string name)
         {
-            if (enumText == string.Empty && isNullable)
+            EnumInfo enumInfo = ValuesAndNamesPerEnum.Get(enumType);
+            ulong v = ToUInt64(value);
+
+            if (!enumInfo.IsFlags)
             {
-                return null;
-            }
-
-            return ParseEnum(t, enumText, disallowValue);
-        }
-
-        public static string ToEnumName(Type enumType, string enumText, bool camelCaseText)
-        {
-            TypeValuesAndNames enumValuesAndNames = ValuesAndNamesPerEnum.Get(enumType);
-
-            string[] names = enumText.Split(',');
-            for (int i = 0; i < names.Length; i++)
-            {
-                string name = names[i].Trim();
-
-                int? matchingIndex = FindIndexByName(enumValuesAndNames.Names, name, name.Length, 0, StringComparison.Ordinal);
-                string resolvedEnumName = matchingIndex != null
-                    ? enumValuesAndNames.ResolvedNames[matchingIndex.Value]
-                    : name;
-
-                if (camelCaseText)
+                int index = Array.BinarySearch(enumInfo.Values, v);
+                if (index >= 0)
                 {
-                    resolvedEnumName = StringUtils.ToCamelCase(resolvedEnumName);
+                    name = enumInfo.ResolvedNames[index];
+                    if (camelCaseText)
+                    {
+                        name = StringUtils.ToCamelCase(name);
+                    }
+
+                    return true;
                 }
 
-                names[i] = resolvedEnumName;
+                // is number value
+                name = null;
+                return false;
             }
-
-            string finalName = string.Join(", ", names);
-
-            return finalName;
+            else // These are flags OR'ed together (We treat everything as unsigned types)
+            {
+                name = InternalFlagsFormat(enumInfo, v, camelCaseText);
+                return name != null;
+            }
         }
 
-        public static TypeValuesAndNames GetEnumValuesAndNames(Type enumType)
+        private static String InternalFlagsFormat(EnumInfo entry, ulong result, bool camelCaseText)
+        {
+            string[] resolvedNames = entry.ResolvedNames;
+            ulong[] values = entry.Values;
+
+            int index = values.Length - 1;
+            StringBuilder sb = new StringBuilder();
+            bool firstTime = true;
+            ulong saveResult = result;
+
+            // We will not optimize this code further to keep it maintainable. There are some boundary checks that can be applied
+            // to minimize the comparsions required. This code works the same for the best/worst case. In general the number of
+            // items in an enum are sufficiently small and not worth the optimization.
+            while (index >= 0)
+            {
+                if (index == 0 && values[index] == 0)
+                {
+                    break;
+                }
+
+                if ((result & values[index]) == values[index])
+                {
+                    result -= values[index];
+                    if (!firstTime)
+                    {
+                        sb.Insert(0, EnumSeparatorString);
+                    }
+
+                    string resolvedName = resolvedNames[index];
+                    sb.Insert(0, camelCaseText ? StringUtils.ToCamelCase(resolvedName) : resolvedName);
+                    firstTime = false;
+                }
+
+                index--;
+            }
+
+            string returnString;
+            if (result != 0)
+            {
+                // We were unable to represent this number as a bitwise or of valid flags
+                returnString = null; // return null so the caller knows to .ToString() the input
+            }
+            else if (saveResult == 0)
+            {
+                // For the cases when we have zero
+                if (values.Length > 0 && values[0] == 0)
+                {
+                    returnString = resolvedNames[0]; // Zero was one of the enum values.
+                    if (camelCaseText)
+                    {
+                        returnString = StringUtils.ToCamelCase(returnString);
+                    }
+                }
+                else
+                {
+                    returnString = null;
+                }
+            }
+            else
+            {
+                returnString = sb.ToString(); // Return the string representation
+            }
+
+            return returnString;
+        }
+
+        public static EnumInfo GetEnumValuesAndNames(Type enumType)
         {
             return ValuesAndNamesPerEnum.Get(enumType);
         }
@@ -183,30 +247,23 @@ namespace Newtonsoft.Json.Utilities
             }
         }
 
-        private static object ParseEnum(Type enumType, string value, bool disallowNumber)
+        public static object ParseEnum(Type enumType, string value, bool disallowNumber)
         {
-            if (enumType == null)
-            {
-                throw new ArgumentNullException(nameof(enumType));
-            }
+            ValidationUtils.ArgumentNotNull(enumType, nameof(enumType));
+            ValidationUtils.ArgumentNotNull(value, nameof(value));
 
             if (!enumType.IsEnum())
             {
                 throw new ArgumentException("Type provided must be an Enum.", nameof(enumType));
             }
 
-            if (value == null)
-            {
-                throw new ArgumentNullException(nameof(value));
-            }
-
-            TypeValuesAndNames entry = ValuesAndNamesPerEnum.Get(enumType);
+            EnumInfo entry = ValuesAndNamesPerEnum.Get(enumType);
             string[] enumNames = entry.Names;
             string[] resolvedNames = entry.ResolvedNames;
             ulong[] enumValues = entry.Values;
 
             // first check if the entire text (including commas) matches a resolved name
-            int? matchingIndex = MatchName(value, enumNames, resolvedNames, 0, value.Length, StringComparison.Ordinal);
+            int? matchingIndex = FindIndexByName(resolvedNames, value, 0, value.Length, StringComparison.Ordinal);
             if (matchingIndex != null)
             {
                 return Enum.ToObject(enumType, enumValues[matchingIndex.Value]);
@@ -226,7 +283,7 @@ namespace Newtonsoft.Json.Utilities
                 throw new ArgumentException("Must specify valid information for parsing in the string.");
             }
 
-            // first check whether string is a number
+            // check whether string is a number and parse as a number value
             char firstNonWhitespaceChar = value[firstNonWhitespaceIndex];
             if (char.IsDigit(firstNonWhitespaceChar) || firstNonWhitespaceChar == '-' || firstNonWhitespaceChar == '+')
             {
@@ -282,6 +339,7 @@ namespace Newtonsoft.Json.Utilities
                 }
                 int valueSubstringLength = endIndexNoWhitespace - valueIndex;
 
+                // match with case sensitivity
                 matchingIndex = MatchName(value, enumNames, resolvedNames, valueIndex, valueSubstringLength, StringComparison.Ordinal);
 
                 // if no match found, attempt case insensitive search
@@ -290,11 +348,11 @@ namespace Newtonsoft.Json.Utilities
                     matchingIndex = MatchName(value, enumNames, resolvedNames, valueIndex, valueSubstringLength, StringComparison.OrdinalIgnoreCase);
                 }
 
-                // If we couldn't find a match
                 if (matchingIndex == null)
                 {
+                    // still can't find a match
                     // before we throw an error, check whether the entire string has a case insensitive match against resolve names
-                    matchingIndex = MatchName(value, enumNames, resolvedNames, 0, value.Length, StringComparison.OrdinalIgnoreCase);
+                    matchingIndex = FindIndexByName(resolvedNames, value, 0, value.Length, StringComparison.OrdinalIgnoreCase);
                     if (matchingIndex != null)
                     {
                         return Enum.ToObject(enumType, enumValues[matchingIndex.Value]);
@@ -315,16 +373,16 @@ namespace Newtonsoft.Json.Utilities
 
         private static int? MatchName(string value, string[] enumNames, string[] resolvedNames, int valueIndex, int valueSubstringLength, StringComparison comparison)
         {
-            int? matchingIndex = FindIndexByName(resolvedNames, value, valueSubstringLength, valueIndex, comparison);
+            int? matchingIndex = FindIndexByName(resolvedNames, value, valueIndex, valueSubstringLength, comparison);
             if (matchingIndex == null)
             {
-                matchingIndex = FindIndexByName(enumNames, value, valueSubstringLength, valueIndex, comparison);
+                matchingIndex = FindIndexByName(enumNames, value, valueIndex, valueSubstringLength, comparison);
             }
 
             return matchingIndex;
         }
 
-        private static int? FindIndexByName(string[] enumNames, string value, int valueSubstringLength, int valueIndex, StringComparison comparison)
+        private static int? FindIndexByName(string[] enumNames, string value, int valueIndex, int valueSubstringLength, StringComparison comparison)
         {
             for (int i = 0; i < enumNames.Length; i++)
             {
@@ -337,19 +395,5 @@ namespace Newtonsoft.Json.Utilities
 
             return null;
         }
-    }
-
-    internal class TypeValuesAndNames
-    {
-        public TypeValuesAndNames(ulong[] values, string[] names, string[] resolvedNames)
-        {
-            Values = values;
-            Names = names;
-            ResolvedNames = resolvedNames;
-        }
-
-        public readonly ulong[] Values;
-        public readonly string[] Names;
-        public readonly string[] ResolvedNames;
     }
 }
